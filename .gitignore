@@ -1,2 +1,3 @@
-# Project exclude paths
+token_vk.txt
+yandex_token.txt
 /venv/
