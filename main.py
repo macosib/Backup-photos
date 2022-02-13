@@ -1,6 +1,5 @@
 import time
 import requests
-from pprint import pprint
 import os
 import json
 
@@ -55,15 +54,15 @@ class VkPhotos:
         response.raise_for_status()
         if response.status_code == 200:
             print(f'Список фотографий с альбома id{album_id} получен')
-        for photo in response.json()['response']['items']:
-            max_size_photo = sorted(photo['sizes'], key=lambda x: (x['height'], x['width']), reverse=True)[0]
-            if f"{photo['likes']['count']}.jpg" in result:
-                result.update({f"{photo['likes']['count']} {photo['date']}.jpg": max_size_photo})
-                logs_file.extend([{'file_name': f"{photo['likes']['count']} {photo['date']}.jpg",
+        for foto in response.json()['response']['items']:
+            max_size_photo = sorted(foto['sizes'], key=lambda x: (x['height'], x['width']), reverse=True)[0]
+            if f"{foto['likes']['count']}.jpg" in result:
+                result.update({f"{foto['likes']['count']} {foto['date']}.jpg": max_size_photo})
+                logs_file.extend([{'file_name': f"{foto['likes']['count']} {foto['date']}.jpg",
                                    'size': f"{max_size_photo['height']}x{max_size_photo['width']}"}])
             else:
-                result.update({f"{photo['likes']['count']}.jpg": max_size_photo})
-                logs_file.extend([{'file_name': f"{photo['likes']['count']}.jpg",
+                result.update({f"{foto['likes']['count']}.jpg": max_size_photo})
+                logs_file.extend([{'file_name': f"{foto['likes']['count']}.jpg",
                                    'size': f"{max_size_photo['height']}x{max_size_photo['width']}"}])
         return result, logs_file
 
@@ -79,26 +78,26 @@ class YandexDisk:
             'Authorization': f'OAuth {self.token}'
         }
 
-    def get_files_list(self, path_to_upload_name):
+    def get_files_list(self, name_folder):
         files_url = 'https://cloud-api.yandex.net/v1/disk/resources/'
-        params = {"path": path_to_upload_name}
+        params = {"path": name_folder}
         headers = self.get_headers()
         response = requests.get(files_url, headers=headers, params=params)
         return response.json()
 
-    def create_folder(self, path_to_upload_name):
+    def create_folder(self, name_folder):
         url = 'https://cloud-api.yandex.net/v1/disk/resources'
         headers = self.get_headers()
-        params = {"path": path_to_upload_name}
+        params = {"path": name_folder}
         response = requests.put(url, headers=headers, params=params)
         response.raise_for_status()
         if response.status_code == 201:
-            print(f'Папка {path_to_upload_name} успешно создана')
+            print(f'Папка {name_folder} успешно создана')
 
-    def upload_file_to_disk_from_link(self, path_to_upload_name, file_name, url_upload_vk):
+    def upload_file_to_disk_from_link(self, name_folder, file_name, url_upload_vk):
         upload_url = "https://cloud-api.yandex.net/v1/disk/resources/upload"
         headers = self.get_headers()
-        params = {"path": f"{path_to_upload_name}{file_name}", "url": url_upload_vk}
+        params = {"path": f"{name_folder}{file_name}", "url": url_upload_vk}
         response = requests.post(upload_url, headers=headers, params=params)
         response.raise_for_status()
         if response.status_code == 202:
