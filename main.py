@@ -31,7 +31,7 @@ class VkPhotos:
         response = requests.get(get_foto_list_url, params={**self.params, **get_foto_list_params})
         response.raise_for_status()
         if response.status_code == 200:
-            print('Список альбомов пользователя получен')
+            print(f'Список альбомов пользователя id{user_id_vk} получен')
 
         result_all_id = []
         if response.json()['response']['items']:
@@ -53,7 +53,7 @@ class VkPhotos:
         response = requests.get(get_foto_list_url, params={**self.params, **get_foto_list_params})
         response.raise_for_status()
         if response.status_code == 200:
-            print('Список фотографий с альбома получен')
+            print(f'Список фотографий с альбома id{album_id} получен')
         for photo in response.json()['response']['items']:
             max_size_photo = sorted(photo['sizes'], key=lambda x: (x['height'], x['width']), reverse=True)[0]
             if f"{photo['likes']['count']}.jpg" in result:
@@ -92,7 +92,7 @@ class YandexDisk:
         response = requests.put(url, headers=headers, params=params)
         response.raise_for_status()
         if response.status_code == 201:
-            print('Папка успешно создана')
+            print(f'Папка {path_to_upload_name} успешно создана')
 
     def upload_file_to_disk_from_link(self, path_to_upload_name, file_name, url_upload_vk):
         upload_url = "https://cloud-api.yandex.net/v1/disk/resources/upload"
