@@ -2,6 +2,7 @@ import time
 import requests
 from pprint import pprint
 import os
+import json
 
 with open(os.path.join(os.getcwd(), 'token_vk.txt'), 'r', encoding='UTF-8') as file_object:
     token_vk = file_object.read().strip()
@@ -107,6 +108,8 @@ class YandexDisk:
 if __name__ == '__main__':
     downloader = VkPhotos(token_vk, '5.131', user_id_vk)
     uploader = YandexDisk(token_yandex)
+    output_file = []
+
 
     def check_name(name):
         if 'error' in uploader.get_files_list(name):
@@ -114,6 +117,7 @@ if __name__ == '__main__':
         else:
             print('Папка с таким названием уже существует! Необходимо ввести другое имя')
             return 'False'
+
 
     while True:
         path_to_upload_name = input('Введите имя папки, для загрузки фотографий: ')
@@ -125,3 +129,6 @@ if __name__ == '__main__':
         time.sleep(0.5)
         for photo in downloader.get_photos_list(id_album)[0].items():
             uploader.upload_file_to_disk_from_link(f"{path_to_upload_name}/", photo[0], photo[1]['url'])
+        output_file.extend(downloader.get_photos_list(id_album)[1])
+    with open('output_file.json', 'w', encoding='utf-8') as file_object:
+        file_object.write(json.dumps(output_file))
