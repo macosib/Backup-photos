@@ -125,7 +125,7 @@ if __name__ == '__main__':
         else:
             break
     for id_album in downloader.get_all_id_albums():
-        time.sleep(0.5)
+        time.sleep(0.33)
         for photo in downloader.get_photos_list(id_album)[0].items():
             uploader.upload_file_to_disk_from_link(f"{path_to_upload_name}/", photo[0], photo[1]['url'])
         output_file.extend(downloader.get_photos_list(id_album)[1])
