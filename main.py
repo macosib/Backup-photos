@@ -20,15 +20,19 @@ class VkPhotos:
         self.user_id_vk = userid_vk
         self.params = {
             'access_token': token,
-            'v': version
+            'v': version,
+            'owner_id': user_id_vk
+
+        }
+        self.params_for_get_foto = {
+            'user_id': user_id_vk,
+            'extended': '1',
+            'count': '5'
         }
 
     def get_all_id_albums(self):
         get_foto_list_url = self.url + 'photos.getAlbums'
-        get_foto_list_params = {
-            'owner_id': user_id_vk
-        }
-        response = requests.get(get_foto_list_url, params={**self.params, **get_foto_list_params})
+        response = requests.get(get_foto_list_url, params=self.params)
         response.raise_for_status()
         if response.status_code == 200:
             print(f'Список альбомов пользователя id{user_id_vk} получен')
@@ -39,22 +43,10 @@ class VkPhotos:
                 result_all_id.append(str(album['id']))
         return result_all_id
 
-    def get_photos_list(self, album_id):
+    def __max_size_foto_filter(self, photos):
         result = {}
         logs_file = []
-        get_foto_list_url = self.url + 'photos.get'
-        get_foto_list_params = {
-            'user_id': user_id_vk,
-            'owner_id': user_id_vk,
-            'album_id': album_id,
-            'extended': '1',
-            'count': '5'
-        }
-        response = requests.get(get_foto_list_url, params={**self.params, **get_foto_list_params})
-        response.raise_for_status()
-        if response.status_code == 200:
-            print(f'Список фотографий с альбома id{album_id} получен')
-        for foto in response.json()['response']['items']:
+        for foto in photos.json()['response']['items']:
             max_size_photo = sorted(foto['sizes'], key=lambda x: (x['height'], x['width']), reverse=True)[0]
             if f"{foto['likes']['count']}.jpg" in result:
                 result.update({f"{foto['likes']['count']} {foto['date']}.jpg": max_size_photo})
@@ -65,6 +57,24 @@ class VkPhotos:
                 logs_file.extend([{'file_name': f"{foto['likes']['count']}.jpg",
                                    'size': f"{max_size_photo['height']}x{max_size_photo['width']}"}])
         return result, logs_file
+
+    def get_photos_from_any_album(self, album_id):
+        link = self.url + 'photos.get'
+        params = {'album_id': album_id}
+        response = requests.get(link, params={**self.params, **self.params_for_get_foto, **params})
+        response.raise_for_status()
+        if response.status_code == 200:
+            print(f'Список фотографий с альбома id{album_id} получен')
+        return self.__max_size_foto_filter(response)
+
+    def get_photos_from_wall(self, album_id='profile'):
+        link = self.url + 'photos.get'
+        params = {'album_id': album_id}
+        response = requests.get(link, params={**self.params, **self.params_for_get_foto, **params})
+        response.raise_for_status()
+        if response.status_code == 200:
+            print(f'Список фотографий со профиля id{user_id_vk} получен')
+        return self.__max_size_foto_filter(response)
 
 
 class YandexDisk:
@@ -124,10 +134,18 @@ if __name__ == '__main__':
             continue
         else:
             break
+
+    # Загрузка фото со всех папок
     for id_album in downloader.get_all_id_albums():
         time.sleep(0.33)
-        for photo in downloader.get_photos_list(id_album)[0].items():
+        for photo in downloader.get_photos_from_any_album(id_album)[0].items():
             uploader.upload_file_to_disk_from_link(f"{path_to_upload_name}/", photo[0], photo[1]['url'])
-        output_file.extend(downloader.get_photos_list(id_album)[1])
+        output_file.extend(downloader.get_photos_from_any_album(id_album)[1])
+
+    # Загрузка фото с профиля
+    for photo in downloader.get_photos_from_wall()[0].items():
+        uploader.upload_file_to_disk_from_link(f"{path_to_upload_name}/", photo[0], photo[1]['url'])
+        output_file.extend(downloader.get_photos_from_wall()[1])
+
     with open('output_file.json', 'w', encoding='utf-8') as file_object:
         file_object.write(json.dumps(output_file))
