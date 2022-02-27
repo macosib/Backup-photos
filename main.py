@@ -1,12 +1,15 @@
 import time
 import os
 import json
+from pprint import pprint
+
 import requests
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseUpload
 from urllib3.packages.six import BytesIO
+
 
 class VkPhotos:
     url = 'https://api.vk.com/method/'
@@ -42,7 +45,8 @@ class VkPhotos:
         result = {}
         logs_file = []
         for foto in photos.json()['response']['items']:
-            max_size_photo = sorted(foto['sizes'], key=lambda x: (x['height'], x['width']), reverse=True)[0]
+            # max_size_photo = sorted(foto['sizes'], key=lambda x: (x['height'], x['width']), reverse=True)[0]
+            max_size_photo = foto['sizes'][-1]
             if f"{foto['likes']['count']}.jpg" in result:
                 result.update({f"{foto['likes']['count']} {foto['date']}.jpg": max_size_photo})
                 logs_file.extend([{'file_name': f"{foto['likes']['count']} {foto['date']}.jpg",
@@ -126,7 +130,6 @@ class YandexDisk:
 
 class GoogleDrive:
 
-    folder_id = '1qPD-H-fxqvHnMuL70AFvQb93BCAN0lV-'
     def main_google(self):
         try:
             SCOPES = ['https://www.googleapis.com/auth/drive']
@@ -142,6 +145,14 @@ class GoogleDrive:
         data = self.main_google()
         self.service = data[0]
         self.creds = data[1]
+
+    def create_folder(self, name):
+        file_metadata = {
+            'name': name,
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        return self.service.files().create(body=file_metadata,
+                                           fields='id').execute()['id']
 
     def get_file_list(self):
         results = self.service.files().list(pageSize=10,
@@ -159,12 +170,13 @@ class GoogleDrive:
             pageSize=10, fields="files(name)").execute()
         return results['files']
 
-    def upload_to_goole_drive(self, name, url):
+    def upload_to_goole_drive(self, name, url, folder_id):
+        folder_id = folder_id
         response = requests.get(url)
         file_content = BytesIO(response.content)
         file_metadata = {'name':
                              f'{name}.jpg',
-                         'parents': [self.folder_id]}
+                         'parents': [folder_id]}
         media = MediaIoBaseUpload(file_content, mimetype='image/jpeg')
         self.service.files().create(body=file_metadata, media_body=media, fields='id').execute()
         file_list = self.get_check_file()
@@ -172,6 +184,7 @@ class GoogleDrive:
             if item['name'] == f'{name}.jpg':
                 print(f'Фотография {name}.jpg успешно загружена')
                 break
+
 
 class VkUser:
     url = 'https://api.vk.com/method/'
@@ -192,13 +205,36 @@ class VkUser:
         if response.json()['response'] and 'deactivated' not in response.json()['response'][0]:
             return response.json()['response'][0]['id']
 
-def main():
 
+class Instagramm:
+    upload_url = "https://graph.instagram.com/me/media"
+
+    def __init__(self, token):
+        self.params = {'access_token': token,
+                       'fields': 'media_url'}
+
+    def get_foto(self):
+        result = {}
+        logs_file = []
+        response = requests.get(self.upload_url, params=self.params)
+        response.raise_for_status()
+        if response.status_code == 200:
+            print('Фотографии успешно получены')
+        for item in response.json()['data']:
+            result.update({item['id']: item['media_url']})
+            logs_file.extend([{item['id']: item['media_url']}])
+        return result, logs_file
+
+
+def main():
     with open(os.path.join(os.getcwd(), 'token_vk.txt'), 'r', encoding='UTF-8') as file_object:
         token_vk = file_object.read().strip()
 
     with open(os.path.join(os.getcwd(), 'yandex_token.txt'), 'r', encoding='UTF-8') as file_object:
         token_yandex = file_object.read().strip()
+
+    with open(os.path.join(os.getcwd(), 'instagramm_token.txt'), 'r', encoding='UTF-8') as file_object:
+        token_instagramm = file_object.read().strip()
 
     output_file = []
     user_vk_check = VkUser(token_vk, '5.131')
@@ -217,8 +253,10 @@ def main():
     downloader = VkPhotos(token_vk, '5.131', user_id_vk)
     uploader = YandexDisk(token_yandex)
     uploader_google = GoogleDrive()
+    instagramm_reader = Instagramm(token_instagramm)
 
     ''' Создание папки для загрузки на Яндекс Диске'''
+
     def __create_folder_yandex_disc():
         def check_name(name):
             if 'error' in uploader.get_files_list(name):
@@ -226,6 +264,7 @@ def main():
             else:
                 print('Папка с таким названием уже существует! Необходимо ввести другое имя')
                 return 'False'
+
         while True:
             path_to_upload_name = input('Введите имя папки, для загрузки фотографий: ')
             if check_name(path_to_upload_name) == 'False':
@@ -234,6 +273,7 @@ def main():
                 return path_to_upload_name
 
     ''' Загрузка фотографий профиля пользователя на Google Drive'''
+
     def upload_profile_photo_from_vk_to_google_drive():
         photos = downloader.get_photos_from_profile()
         for photo in photos[0].items():
@@ -243,6 +283,7 @@ def main():
             output_file.extend(photos[1])
 
     '''Загрузка фото со всех альбомов пользователя на Google Drive'''
+
     def upload_all_foto_to_google_drive():
         all_id_album = downloader.get_all_id_albums()
         for id_album in all_id_album:
@@ -255,6 +296,7 @@ def main():
                 output_file.extend(photos[1])
 
     '''Загрузка фото со всех альбомов пользователя на Yandex Disk'''
+
     def upload_all_foto_to_yandex_disk():
         all_id_album = downloader.get_all_id_albums()
         path_to_upload_name = __create_folder_yandex_disc()
@@ -268,6 +310,7 @@ def main():
                 output_file.extend(photos[1])
 
     '''Загрузка фото профиля на Yandex Disk'''
+
     def upload_profile_foto_to_yandex_disk():
         photos = downloader.get_photos_from_profile()
         path_to_upload_name = __create_folder_yandex_disc()
@@ -277,26 +320,48 @@ def main():
             uploader.upload_file_to_disk_from_link(f"{path_to_upload_name}/", name, url)
             output_file.extend(photos[1])
 
+    '''Загрузка фото c инстаграмм на Yandex Disk'''
+
+    def upload_foto_inst_to_yandex_disk():
+        photos = instagramm_reader.get_foto()
+        path_to_upload_name = __create_folder_yandex_disc()
+        for name, url in photos[0].items():
+            uploader.upload_file_to_disk_from_link(f"{path_to_upload_name}/", name, url)
+            output_file.extend(photos[1])
+
+    ''' Загрузка фотографий профиля инстаграмм на Google Drive'''
+
+    def upload_instagramm_photo_to_google_drive():
+        photos = instagramm_reader.get_foto()
+        folder_id = uploader_google.create_folder(input('Введите имя каталога, куда необходимо загрузить файлы: '))
+        for name, url in photos[0].items():
+            uploader_google.upload_to_goole_drive(name, url, folder_id)
+            output_file.extend(photos[1])
+
     commands = {'1': upload_profile_foto_to_yandex_disk,
                 '2': upload_all_foto_to_yandex_disk,
                 '3': upload_profile_photo_from_vk_to_google_drive,
-                '4': upload_all_foto_to_google_drive
+                '4': upload_all_foto_to_google_drive,
+                '5': upload_foto_inst_to_yandex_disk,
+                '6': upload_instagramm_photo_to_google_drive
                 }
     while True:
         print('Доступны следующие команды:')
         print('''
 Доступны следующие команды:
 Загрузить фотографии профиля на яндекс диск - введите "1"
- Загрузить все фотографии на яндекс диск - введите "2"
+Загрузить все фотографии на яндекс диск - введите "2"
 Загрузить фотографии профиля на Google Drive - введите "3"
- Загрузить все фотографии на Google Drive - введите "4"
-Выйти из программы - введите "5"
+Загрузить все фотографии на Google Drive - введите "4"
+Загрузка фото c инстаграмм на Yandex Disk - введите "5"
+Загрузка фотографий профиля инстаграмм на Google Drive - введите "6"
+Выйти из программы - введите "7"
         ''')
         command = input()
         if command in commands:
             commands[command]()
             break
-        elif command == '5':
+        elif command == '7':
             break
         else:
             print('Повторите ввод')
