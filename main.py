@@ -1,7 +1,6 @@
 import time
 import os
 import json
-from pprint import pprint
 
 import requests
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -9,7 +8,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseUpload
 from urllib3.packages.six import BytesIO
-
+import time
 
 class VkPhotos:
     url = 'https://api.vk.com/method/'
@@ -25,7 +24,7 @@ class VkPhotos:
         self.params_for_get_foto = {
             'user_id': self.user_id_vk,
             'extended': '1',
-            'count': '5'
+            'count': '50'
         }
 
     def get_all_id_albums(self):
@@ -34,7 +33,6 @@ class VkPhotos:
         response.raise_for_status()
         if response.status_code == 200:
             print(f'Список альбомов пользователя id{self.user_id_vk} получен')
-
         result_all_id = []
         if response.json()['response']['items']:
             for album in response.json()['response']['items']:
@@ -45,26 +43,12 @@ class VkPhotos:
         result = {}
         logs_file = []
         for foto in photos.json()['response']['items']:
-            # max_size_photo = sorted(foto['sizes'], key=lambda x: (x['height'], x['width']), reverse=True)[0]
             max_size_photo = foto['sizes'][-1]
-            if f"{foto['likes']['count']}.jpg" in result:
-                result.update({f"{foto['likes']['count']} {foto['date']}.jpg": max_size_photo})
-                logs_file.extend([{'file_name': f"{foto['likes']['count']} {foto['date']}.jpg",
-                                   'size': f"{max_size_photo['height']}x{max_size_photo['width']}"}])
-            else:
-                result.update({f"{foto['likes']['count']}.jpg": max_size_photo})
-                logs_file.extend([{'file_name': f"{foto['likes']['count']}.jpg",
-                                   'size': f"{max_size_photo['height']}x{max_size_photo['width']}"}])
-        return result, logs_file
+            current_time = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime(foto['date']))
 
-    def __max_size_foto_filter_profile(self, photos):
-        result = {}
-        logs_file = []
-        for foto in photos.json()['response']['items']:
-            max_size_photo = foto['sizes'][-1]
             if f"{foto['likes']['count']}.jpg" in result:
-                result.update({f"{foto['likes']['count']} {foto['date']}.jpg": max_size_photo})
-                logs_file.extend([{'file_name': f"{foto['likes']['count']} {foto['date']}.jpg",
+                result.update({f"{foto['likes']['count']} {current_time}.jpg": max_size_photo})
+                logs_file.extend([{'file_name': f"{foto['likes']['count']} {current_time}.jpg",
                                    'size': f"{max_size_photo['height']}x{max_size_photo['width']}"}])
             else:
                 result.update({f"{foto['likes']['count']}.jpg": max_size_photo})
@@ -77,6 +61,7 @@ class VkPhotos:
         params = {'album_id': album_id}
         response = requests.get(link, params={**self.params, **self.params_for_get_foto, **params})
         response.raise_for_status()
+        time.sleep(0.33)
         if response.status_code == 200:
             print(f'Список фотографий с альбома id{album_id} получен')
         return self.__max_size_foto_filter(response)
@@ -86,9 +71,10 @@ class VkPhotos:
         params = {'album_id': album_id}
         response = requests.get(link, params={**self.params, **self.params_for_get_foto, **params})
         response.raise_for_status()
+        time.sleep(0.33)
         if response.status_code == 200:
             print(f'Список фотографий со профиля id{self.user_id_vk} получен')
-        return self.__max_size_foto_filter_profile(response)
+        return self.__max_size_foto_filter(response)
 
 
 class YandexDisk:
@@ -123,6 +109,7 @@ class YandexDisk:
         headers = self.get_headers()
         params = {"path": f"{name_folder}{file_name}", "url": url_upload_vk}
         response = requests.post(upload_url, headers=headers, params=params)
+        time.sleep(0.33)
         response.raise_for_status()
         if response.status_code == 202:
             print(f"Фото {file_name} успешно загружено")
@@ -276,23 +263,26 @@ def main():
 
     def upload_profile_photo_from_vk_to_google_drive():
         photos = downloader.get_photos_from_profile()
+        folder_id = uploader_google.create_folder(input('Введите имя каталога, куда необходимо загрузить файлы: '))
         for photo in photos[0].items():
+            time.sleep(0.33)
             name = photo[0].split('.')[0]
             url = photo[1]['url']
-            uploader_google.upload_to_goole_drive(name, url)
+            uploader_google.upload_to_goole_drive(name, url, folder_id)
             output_file.extend(photos[1])
 
     '''Загрузка фото со всех альбомов пользователя на Google Drive'''
 
     def upload_all_foto_to_google_drive():
         all_id_album = downloader.get_all_id_albums()
+        folder_id = uploader_google.create_folder(input('Введите имя каталога, куда необходимо загрузить файлы: '))
         for id_album in all_id_album:
             photos = downloader.get_photos_from_any_album(id_album)
             for photo in photos[0].items():
                 time.sleep(0.33)
                 name = photo[0].split('.')[0]
                 url = photo[1]['url']
-                uploader_google.upload_to_goole_drive(name, url)
+                uploader_google.upload_to_goole_drive(name, url, folder_id)
                 output_file.extend(photos[1])
 
     '''Загрузка фото со всех альбомов пользователя на Yandex Disk'''
@@ -302,7 +292,7 @@ def main():
         path_to_upload_name = __create_folder_yandex_disc()
         for id_album in all_id_album:
             photos = downloader.get_photos_from_any_album(id_album)
-            time.sleep(0.33)
+            time.sleep(0.5)
             for photo in photos[0].items():
                 name = photo[0].split('.')[0]
                 url = photo[1]['url']
@@ -315,6 +305,7 @@ def main():
         photos = downloader.get_photos_from_profile()
         path_to_upload_name = __create_folder_yandex_disc()
         for photo in photos[0].items():
+            time.sleep(0.33)
             name = photo[0].split('.')[0]
             url = photo[1]['url']
             uploader.upload_file_to_disk_from_link(f"{path_to_upload_name}/", name, url)
